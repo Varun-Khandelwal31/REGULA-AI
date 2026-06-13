@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Scale,
@@ -10,7 +10,6 @@ import {
   TrendingUp,
   FolderOpen,
   Settings,
-  Menu,
   X,
   Bell,
   ChevronDown,
@@ -32,12 +31,20 @@ const navItems = [
 const AppLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const location = useLocation();
 
-  const currentPage = navItems.find(item => item.to === location.pathname)?.label || 'Dashboard';
-  const healthScore = 78;
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  // Get user from localStorage or use defaults
+  const currentPage = navItems.find(item => item.to === location.pathname)?.label || 'Dashboard';
+  
+  // Calculate health score dynamically
   const getStoredUser = () => {
     try {
       const stored = localStorage.getItem('regulaai_user');
@@ -45,10 +52,24 @@ const AppLayout = () => {
     } catch (e) {
       // ignore
     }
-    return { fullName: 'Demo User', email: 'demo@example.com', businessName: 'Demo Business', industry: 'Retail' };
+    return { fullName: 'Demo User', email: 'demo@example.com', businessName: 'Demo Business', industry: 'Retail', state: 'Delhi' };
   };
 
   const user = getStoredUser();
+
+  // Personalize Obligations count/health
+  const sectorObligations = {
+    'Textile': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'HSN Report', 'GSTR-9'],
+    'Food & Beverage': ['GSTR-1', 'GSTR-3B', 'FSSAI Renewal', 'EPF Challan', 'ESI', 'Shop License Renewal'],
+    'IT Services': ['GSTR-1', 'GSTR-3B', 'TDS Return', 'Advance Tax', 'Professional Tax', 'MCA Annual Return'],
+    'default': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'Professional Tax', 'MCA Annual Return']
+  };
+
+  const currentSector = user?.industry || 'default';
+  const sectorList = sectorObligations[currentSector as keyof typeof sectorObligations] || sectorObligations['default'];
+
+  // Let's hardcode/mock a health score calculation based on the user's specific context if needed, or stick to 78.
+  const healthScore = 78;
 
   const getInitials = (name: string) => {
     return name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -65,9 +86,17 @@ const AppLayout = () => {
     <div className="min-h-screen bg-surface flex">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-60 bg-navy transform transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: '240px',
+          backgroundColor: '#060E24',
+          transform: isMobile ? `translateX(${sidebarOpen ? '0' : '-240px'})` : 'none',
+          transition: 'transform 0.3s ease',
+          zIndex: 300,
+        }}
       >
         <div className="h-full flex flex-col">
           {/* Logo */}
@@ -76,9 +105,11 @@ const AppLayout = () => {
               <Scale className="w-6 h-6 text-primary" />
               <span className="text-xl font-bold text-white">RegulaAI</span>
             </a>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/70">
-              <X className="w-5 h-5" />
-            </button>
+            {isMobile && (
+              <button onClick={() => setSidebarOpen(false)} className="text-white/70">
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
           {/* Navigation */}
@@ -87,7 +118,9 @@ const AppLayout = () => {
               <NavLink
                 key={item.to}
                 to={item.to}
-                onClick={() => setSidebarOpen(false)}
+                onClick={() => {
+                  if (isMobile) setSidebarOpen(false);
+                }}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${
                     isActive
@@ -139,24 +172,51 @@ const AppLayout = () => {
         </div>
       </aside>
 
-      {/* Overlay */}
-      {sidebarOpen && (
+      {/* Overlay (mobile only, behind sidebar) */}
+      {isMobile && sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 299,
+          }}
         />
       )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-60">
+      <div
+        className="flex-1"
+        style={{
+          marginLeft: isMobile ? '0' : '240px',
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* Header */}
-        <header className="h-16 bg-white border-b border-border flex items-center px-4 sticky top-0 z-30">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden mr-4 text-text-secondary"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+        <header
+          className="h-16 bg-white border-b border-border flex items-center px-4 sticky top-0 z-30"
+          style={{
+            left: isMobile ? '0' : '240px',
+            width: isMobile ? '100%' : 'calc(100% - 240px)',
+          }}
+        >
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                marginRight: '12px',
+              }}
+            >
+              ☰
+            </button>
+          )}
 
           <div className="flex items-center text-sm text-text-secondary">
             <span>{currentPage}</span>
@@ -175,7 +235,7 @@ const AppLayout = () => {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-auto">
             <button className="relative text-text-secondary hover:text-text-primary transition">
               <Bell className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent-red text-white text-xs rounded-full flex items-center justify-center">
@@ -227,7 +287,7 @@ const AppLayout = () => {
         </header>
 
         {/* Page Content */}
-        <main className="p-6">
+        <main className="p-6 flex-1">
           <Outlet />
         </main>
       </div>

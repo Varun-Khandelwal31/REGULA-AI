@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Download, CheckCircle, Globe, Filter, Search, Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Download, CheckCircle, Globe, Filter, Search, Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { mockObligations } from '../../data/mockData';
+import { useToast } from '../../contexts/ToastContext';
 
 const Obligations = () => {
+  const { addToast } = useToast();
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'penalty' | 'type'>('date');
@@ -12,7 +14,44 @@ const Obligations = () => {
   const [completed, setCompleted] = useState<string[]>([]);
   const navigate = useNavigate();
 
-  const filteredObligations = mockObligations
+  // Read onboarding sector
+  const userData = JSON.parse(localStorage.getItem('regulaai_user') || '{}');
+  const sector = userData.industry || userData.sector || 'default';
+
+  // Sector based obligations filter
+  const sectorObligations = {
+    'Textile': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'HSN Report', 'GSTR-9'],
+    'Food & Beverage': ['GSTR-1', 'GSTR-3B', 'FSSAI Renewal', 'EPF Challan', 'ESI', 'Shop License Renewal'],
+    'IT Services': ['GSTR-1', 'GSTR-3B', 'TDS Return', 'Advance Tax', 'Professional Tax', 'MCA Annual Return'],
+    'default': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'Professional Tax', 'MCA Annual Return']
+  };
+
+  const sectorList = sectorObligations[sector as keyof typeof sectorObligations] || sectorObligations['default'];
+
+  const matchObligation = (obName: string, obType: string) => {
+    const nameLower = obName.toLowerCase();
+    const typeLower = obType.toLowerCase();
+    return sectorList.some(term => {
+      const termLower = term.toLowerCase();
+      if (termLower === 'gstr-1') return nameLower.includes('gstr-1');
+      if (termLower === 'gstr-3b') return nameLower.includes('gstr-3b');
+      if (termLower === 'gstr-9') return nameLower.includes('gstr-9');
+      if (termLower === 'epf challan') return nameLower.includes('epf') || typeLower.includes('epfo');
+      if (termLower === 'esi contribution' || termLower === 'esi') return nameLower.includes('esi') || typeLower.includes('esi');
+      if (termLower === 'fssai renewal') return nameLower.includes('fssai') || typeLower.includes('fssai');
+      if (termLower === 'shop license renewal') return nameLower.includes('shop') || nameLower.includes('license');
+      if (termLower === 'tds return') return nameLower.includes('tds') || typeLower.includes('income tax');
+      if (termLower === 'advance tax') return nameLower.includes('advance') || typeLower.includes('income tax');
+      if (termLower === 'professional tax') return nameLower.includes('professional') || typeLower.includes('professional');
+      if (termLower === 'mca annual return') return nameLower.includes('mca') || typeLower.includes('mca');
+      if (termLower === 'hsn report') return nameLower.includes('hsn') || nameLower.includes('gstr-1');
+      return nameLower.includes(termLower) || typeLower.includes(termLower);
+    });
+  };
+
+  const currentObligations = mockObligations.filter(o => matchObligation(o.name, o.type));
+
+  const filteredObligations = currentObligations
     .filter(obligation => {
       const matchesFilter = filter === 'All' || obligation.type === filter;
       const matchesSearch = obligation.name.toLowerCase().includes(search.toLowerCase());
@@ -24,8 +63,8 @@ const Obligations = () => {
       return a.type.localeCompare(b.type);
     });
 
-  const getStatusBadge = (status: string, days: number) => {
-    if (status === 'completed' || completed.includes(showCompleteModal || '')) {
+  const getStatusBadge = (status: string, days: number, id: string) => {
+    if (status === 'completed' || completed.includes(id)) {
       return { bg: 'bg-accent-green/10', text: 'text-accent-green', label: 'Completed' };
     }
     if (days <= 0) return { bg: 'bg-accent-red/10', text: 'text-accent-red', label: 'Overdue' };
@@ -50,9 +89,11 @@ const Obligations = () => {
   const markComplete = (id: string) => {
     setCompleted(prev => [...prev, id]);
     setShowCompleteModal(null);
+    addToast('Obligation marked complete', 'success');
   };
 
-  const handleFile = (id: string) => {
+  const handleFile = () => {
+    addToast('Opening Filing Agent...', 'info');
     navigate('/app/filing');
   };
 
@@ -110,19 +151,19 @@ const Obligations = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg p-4 border border-border">
-          <div className="text-2xl font-bold text-text-primary">{mockObligations.length}</div>
+          <div className="text-2xl font-bold text-text-primary">{currentObligations.length}</div>
           <div className="text-sm text-text-tertiary">Total</div>
         </div>
         <div className="bg-white rounded-lg p-4 border border-border">
-          <div className="text-2xl font-bold text-accent-amber">{mockObligations.filter(o => o.status === 'due_soon').length}</div>
+          <div className="text-2xl font-bold text-accent-amber">{currentObligations.filter(o => o.status === 'due_soon').length}</div>
           <div className="text-sm text-text-tertiary">Due This Week</div>
         </div>
         <div className="bg-white rounded-lg p-4 border border-border">
-          <div className="text-2xl font-bold text-accent-red">{mockObligations.filter(o => o.status === 'overdue').length}</div>
+          <div className="text-2xl font-bold text-accent-red">{currentObligations.filter(o => o.status === 'overdue').length}</div>
           <div className="text-sm text-text-tertiary">Overdue</div>
         </div>
         <div className="bg-white rounded-lg p-4 border border-border">
-          <div className="text-2xl font-bold text-accent-green">{mockObligations.filter(o => o.status === 'completed').length + completed.length}</div>
+          <div className="text-2xl font-bold text-accent-green">{currentObligations.filter(o => o.status === 'completed').length + completed.length}</div>
           <div className="text-sm text-text-tertiary">Completed</div>
         </div>
       </div>
@@ -130,7 +171,7 @@ const Obligations = () => {
       {/* Obligations List */}
       <div className="space-y-4">
         {filteredObligations.map(obligation => {
-          const badge = getStatusBadge(obligation.status, obligation.daysRemaining);
+          const badge = getStatusBadge(obligation.status, obligation.daysRemaining, obligation.id);
           const isExpanded = expandedId === obligation.id;
           const done = isCompleted(obligation.id);
 
@@ -220,7 +261,7 @@ const Obligations = () => {
                       {!done && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleFile(obligation.id); }}
+                            onClick={(e) => { e.stopPropagation(); handleFile(); }}
                             className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition flex items-center gap-2"
                           >
                             <Globe className="w-4 h-4" /> File Now
@@ -234,8 +275,11 @@ const Obligations = () => {
                         </>
                       )}
                       <button
-                        disabled
-                        className="px-4 py-2 bg-surface text-text-secondary rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToast('Draft downloaded', 'success');
+                        }}
+                        className="px-4 py-2 bg-surface text-text-secondary hover:bg-border rounded-lg text-sm flex items-center gap-2 transition"
                       >
                         <Download className="w-4 h-4" /> Download Draft
                       </button>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Globe, Scale, Zap, FileText, Download, Plus, ChevronDown, ChevronUp, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
 
 interface AnalysisResult {
   obligation: string;
@@ -22,12 +23,17 @@ interface HistoryItem {
   source: string;
 }
 
+const Spinner = () => <div className="spinner" />;
+
+const CheckIcon = ({ color }: { color: string }) => (
+  <Check className="w-5 h-5 font-bold" style={{ color }} />
+);
+
 const Analyzer = () => {
+  const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'url' | 'text'>('url');
   const [inputValue, setInputValue] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [step, setStep] = useState(-1);
-  const [showResult, setShowResult] = useState(false);
+  const [analysisStage, setAnalysisStage] = useState(0); // 0 = idle, 1 = intake, 2 = debate, 3 = judge, 4 = complete
   const [showTranscript, setShowTranscript] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [addedToObligations, setAddedToObligations] = useState(false);
@@ -37,48 +43,35 @@ const Analyzer = () => {
     { id: 3, date: '2025-06-28', obligation: 'E-invoicing Mandate', confidence: 91, source: 'cbic.gov.in' },
   ]);
 
-  const simulateAnalysis = async () => {
+  const simulateAnalysis = () => {
     if (!inputValue.trim()) return;
 
-    setIsAnalyzing(true);
-    setStep(-1);
-    setShowResult(false);
+    setResult(null);
     setAddedToObligations(false);
+    setAnalysisStage(1);
 
-    // Step 1: Intake
-    await new Promise(r => setTimeout(r, 500));
-    setStep(0);
-    await new Promise(r => setTimeout(r, 1000));
-
-    // Step 2: Debate
-    setStep(1);
-    await new Promise(r => setTimeout(r, 1200));
-
-    // Step 3: Judge
-    setStep(2);
-    await new Promise(r => setTimeout(r, 1000));
-
-    setIsAnalyzing(false);
-    setShowResult(true);
-    setStep(3);
-
-    // Generate result
-    setResult({
-      obligation: 'GSTR-9 Annual Return FY 2024-25',
-      applicableTo: 'GST registered (turnover &gt; ₹2Cr)',
-      deadline: 'December 31, 2025',
-      penalty: '₹200/day (max 0.25% of turnover)',
-      action: 'File consolidated annual GST return through GST portal',
-      confidence: 94,
-      agentA: 96,
-      agentB: 91,
-      judgeScore: 94,
-    });
+    setTimeout(() => setAnalysisStage(2), 800);
+    setTimeout(() => setAnalysisStage(3), 1600);
+    setTimeout(() => {
+      setAnalysisStage(4);
+      setResult({
+        obligation: 'GSTR-9 Annual Return FY 2024-25',
+        applicableTo: 'GST registered (turnover > ₹2Cr)',
+        deadline: 'December 31, 2025',
+        penalty: '₹200/day (max 0.25% of turnover)',
+        action: 'File consolidated annual GST return through GST portal',
+        confidence: 94,
+        agentA: 96,
+        agentB: 91,
+        judgeScore: 94,
+      });
+    }, 2400);
   };
 
   const addToObligations = () => {
     if (!result) return;
     setAddedToObligations(true);
+    addToast('Added to your dashboard', 'success');
 
     // Add to history
     const newHistoryItem: HistoryItem = {
@@ -89,12 +82,6 @@ const Analyzer = () => {
       source: activeTab === 'url' ? inputValue : 'Pasted text',
     };
     setHistory(prev => [newHistoryItem, ...prev]);
-  };
-
-  const getStepStatus = (stepIndex: number) => {
-    if (step > stepIndex) return 'completed';
-    if (step === stepIndex) return 'active';
-    return 'pending';
   };
 
   return (
@@ -142,10 +129,10 @@ const Analyzer = () => {
             />
             <button
               onClick={simulateAnalysis}
-              disabled={isAnalyzing || !inputValue.trim()}
+              disabled={analysisStage > 0 && analysisStage < 4}
               className="px-6 py-3 bg-primary hover:bg-primary-dark text-white font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isAnalyzing ? (
+              {analysisStage > 0 && analysisStage < 4 ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Analyzing...
                 </>
@@ -168,10 +155,10 @@ const Analyzer = () => {
             <div className="flex justify-end">
               <button
                 onClick={simulateAnalysis}
-                disabled={isAnalyzing || !inputValue.trim()}
+                disabled={analysisStage > 0 && analysisStage < 4}
                 className="px-6 py-3 bg-primary hover:bg-primary-dark text-white font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {isAnalyzing ? (
+                {analysisStage > 0 && analysisStage < 4 ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" /> Analyzing...
                   </>
@@ -187,50 +174,60 @@ const Analyzer = () => {
       </div>
 
       {/* Agent Processing */}
-      {isAnalyzing && (
+      {analysisStage > 0 && analysisStage < 4 && (
         <div className="bg-white rounded-card shadow-card p-6">
           <h3 className="font-medium text-text-primary mb-4">Agent Processing</h3>
           <div className="grid md:grid-cols-3 gap-4">
-            {[
-              { icon: Globe, label: 'Intake Agent', desc: 'Fetching circular...' },
-              { icon: Scale, label: 'Debate Agents', desc: 'Interpreting regulation...' },
-              { icon: Zap, label: 'Judge Agent', desc: 'Resolving interpretation...' },
-            ].map((agent, i) => {
-              const status = getStepStatus(i);
-              return (
-                <div key={i} className="flex items-center gap-3 p-4 bg-surface rounded-lg">
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      status === 'completed'
-                        ? 'bg-accent-green text-white'
-                        : status === 'active'
-                        ? 'bg-primary text-white animate-pulse'
-                        : 'bg-border text-text-tertiary'
-                    }`}
-                  >
-                    {status === 'completed' ? (
-                      <Check className="w-5 h-5" />
-                    ) : status === 'active' ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <agent.icon className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-medium text-text-primary">{agent.label}</div>
-                    <div className={`text-sm ${status === 'completed' ? 'text-accent-green' : status === 'active' ? 'text-primary' : 'text-text-tertiary'}`}>
-                      {status === 'completed' ? 'Done' : status === 'active' ? agent.desc : 'Waiting...'}
-                    </div>
+            {/* Step 1 */}
+            {analysisStage >= 1 && (
+              <div className="flex items-center gap-3 p-4 bg-surface rounded-lg">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-surface border-2 border-border">
+                  {analysisStage === 1 ? <Spinner /> : <CheckIcon color="green" />}
+                </div>
+                <div>
+                  <div className="font-medium text-text-primary">📡 Intake Agent</div>
+                  <div className="text-sm text-text-secondary">
+                    {analysisStage === 1 ? "Fetching circular..." : "Circular fetched"}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
+
+            {/* Step 2 */}
+            {analysisStage >= 2 && (
+              <div className="flex items-center gap-3 p-4 bg-surface rounded-lg">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-surface border-2 border-border">
+                  {analysisStage === 2 ? <Spinner /> : <CheckIcon color="green" />}
+                </div>
+                <div>
+                  <div className="font-medium text-text-primary">⚖️ Debate Agents A + B</div>
+                  <div className="text-sm text-text-secondary">
+                    {analysisStage === 2 ? "Interpreting regulation..." : "Complete"}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 */}
+            {analysisStage >= 3 && (
+              <div className="flex items-center gap-3 p-4 bg-surface rounded-lg">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-surface border-2 border-border">
+                  {analysisStage === 3 ? <Spinner /> : <CheckIcon color="green" />}
+                </div>
+                <div>
+                  <div className="font-medium text-text-primary">🔨 Judge Agent</div>
+                  <div className="text-sm text-text-secondary">
+                    {analysisStage === 3 ? "Resolving conflicts..." : "Ruling finalized"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Result */}
-      {showResult && result && (
+      {analysisStage === 4 && result && (
         <div className="bg-white rounded-card shadow-card overflow-hidden border-t-4 border-accent-green animate-fadeIn">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -392,7 +389,7 @@ const Analyzer = () => {
           to { opacity: 1; transform: translateY(0); }
         }
         .animate-fadeIn {
-          animation: fadeIn 0.4s ease-out;
+          animation: fadeIn 400ms ease-out forwards;
         }
       `}</style>
     </div>

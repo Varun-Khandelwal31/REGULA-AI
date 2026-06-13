@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TrendingUp, Bell, Check, ExternalLink, Loader2, Info, Calendar } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Prediction {
   id: number;
@@ -13,11 +14,12 @@ interface Prediction {
 }
 
 const Radar = () => {
+  const { addToast } = useToast();
   const [predictions, setPredictions] = useState<Prediction[]>([
     {
       id: 1,
       probability: 74,
-      title: 'New MSME Registration portal mandatory for turnover &gt;₹40L',
+      title: 'New MSME Registration portal mandatory for turnover >₹40L',
       expectedDate: 'August 2025',
       sources: ['Union Budget speech analysis', 'MCA press release'],
       impact: 'medium',
@@ -68,22 +70,20 @@ const Radar = () => {
 
   const [selectedPrediction, setSelectedPrediction] = useState<Prediction | null>(null);
   const [settingReminder, setSettingReminder] = useState<number | null>(null);
-  const [showReminderToast, setShowReminderToast] = useState(false);
 
   const setReminder = (id: number) => {
     setSettingReminder(id);
     setTimeout(() => {
       setPredictions(prev => prev.map(p => p.id === id ? { ...p, reminded: true } : p));
       setSettingReminder(null);
-      setShowReminderToast(true);
-      setTimeout(() => setShowReminderToast(false), 3000);
+      addToast('Reminder set successfully', 'success');
     }, 1000);
   };
 
   const getProbabilityColor = (prob: number) => {
-    if (prob >= 70) return 'accent-green';
-    if (prob >= 50) return 'accent-amber';
-    return 'accent-red';
+    if (prob >= 70) return 'text-accent-green';
+    if (prob >= 50) return 'text-accent-amber';
+    return 'text-accent-red';
   };
 
   const getImpactColor = (impact: 'low' | 'medium' | 'high') => {
@@ -95,22 +95,8 @@ const Radar = () => {
     return colors[impact];
   };
 
-  const getImpactIcon = (impact: 'low' | 'medium' | 'high') => {
-    if (impact === 'high') return '🔴';
-    if (impact === 'medium') return '🟡';
-    return '🟢';
-  };
-
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Toast Notification */}
-      {showReminderToast && (
-        <div className="fixed top-20 right-6 z-50 bg-accent-green text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fadeIn">
-          <Check className="w-5 h-5" />
-          Reminder set successfully!
-        </div>
-      )}
-
       <div className="bg-navy p-6 rounded-card">
         <div className="flex items-center gap-3 mb-2">
           <TrendingUp className="w-6 h-6 text-primary" />
@@ -300,6 +286,7 @@ const Radar = () => {
             'Parliamentary Standing Committee Reports',
             'CBIC Circulars',
             'MCA Notifications',
+            'Labour Ministry Circular Drafts',
           ].map((source, i) => (
             <div
               key={i}
