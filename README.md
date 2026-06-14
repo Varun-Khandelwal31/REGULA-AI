@@ -1,3 +1,3 @@
 # REGULA-AI
 
-Built with React + Vite + Tailwind CSS
+[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-gr2qepu7)

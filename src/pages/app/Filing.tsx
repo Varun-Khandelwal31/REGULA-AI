@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Globe, Check, Edit, X, CheckCircle, AlertTriangle, Clock, Loader2, FileText, RefreshCw } from 'lucide-react';
-import { useToast } from '../../contexts/ToastContext';
 
 interface FilingStep {
   id: number;
@@ -18,7 +17,6 @@ interface FormData {
 }
 
 const Filing = () => {
-  const { addToast } = useToast();
   const [selectedObligation, setSelectedObligation] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,7 +88,6 @@ const Filing = () => {
       setConfirmationNumber(`GST-2025-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
       setSteps(prev => prev.map((s, i) => i === 3 ? { ...s, status: 'completed', description: 'Submitted successfully!' } : s));
       setCurrentStep(4);
-      addToast('Return filed successfully! ✓', 'success');
     }, 2000);
   };
 

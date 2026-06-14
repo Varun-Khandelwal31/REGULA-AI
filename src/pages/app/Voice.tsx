@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Mic, Send, Globe, FileText, AlertTriangle } from 'lucide-react';
+import { Mic, Send, Globe, FileText, Loader2, AlertTriangle } from 'lucide-react';
 
 interface Message {
   id: number;
-  sender: 'user' | 'bot';
-  text: string;
-  isVoice?: boolean;
+  type: 'user' | 'assistant';
+  content: string;
+  isVoice: boolean;
   voiceDuration?: string;
-  hasCard?: boolean;
+  hasActionCard?: boolean;
   actionCard?: {
     title: string;
     due?: string | null;
@@ -19,75 +19,54 @@ interface Message {
 }
 
 const Voice = () => {
-  const [inputText, setInputText] = useState('');
-  const [language, setLanguage] = useState<'en' | 'hi'>('hi');
-  const [isRecording, setIsRecording] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const allMessages: Omit<Message, 'timestamp'>[] = [
-    { 
-      id: 1, 
-      sender: 'bot', 
-      text: 'Namaste! Main RegulaAI hoon — aapka compliance assistant.' 
-    },
-    { 
-      id: 2, 
-      sender: 'user', 
-      text: '🎙️ Voice Note ▶ 0:04 — "Bhaiya aaj kaunsa filing bachhi hai?"',
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      type: 'user',
+      content: 'Voice Note [0:04]',
       isVoice: true,
-      voiceDuration: '0:04'
+      voiceDuration: '0:04',
+      timestamp: new Date(Date.now() - 60000),
     },
-    { 
-      id: 3, 
-      sender: 'bot', 
-      hasCard: true,
-      text: 'Namaste ji! 2 filings pending hain:\n1️⃣ GSTR-3B — kal tak\n2️⃣ EPF Challan — 5 din mein',
+    {
+      id: 2,
+      type: 'assistant',
+      content: 'Namaste ji! Aapki 2 filings pending hain: GSTR-3B kal tak aur EPF challan 5 din mein. Kya main form tayar karun?',
+      isVoice: true,
+      voiceDuration: '0:12',
+      hasActionCard: true,
       actionCard: {
         title: 'GSTR-3B Draft Ready',
         due: 'Tomorrow',
         amount: '₹8,300',
-      }
+      },
+      timestamp: new Date(Date.now() - 50000),
     },
-    { 
-      id: 4, 
-      sender: 'user', 
-      text: 'Haan bilkul, form tayar karo' 
+    {
+      id: 3,
+      type: 'user',
+      content: 'Haan bilkul',
+      isVoice: false,
+      timestamp: new Date(Date.now() - 40000),
     },
-    { 
-      id: 5, 
-      sender: 'bot', 
-      hasCard: true,
-      text: 'Perfect! ✅ Filing Agent ready kar diya hai.',
+    {
+      id: 4,
+      type: 'assistant',
+      content: 'Perfect! Filing Agent khol raha hoon. Aapka GSTR-3B pre-filled ho jayega. Sirf ek tap mein submit kar sakte ho.',
+      isVoice: false,
+      hasActionCard: true,
       actionCard: {
         title: 'Open Filing Agent',
         link: '/app/filing',
-      }
+      },
+      timestamp: new Date(Date.now() - 30000),
     },
-  ];
-
-  const [visibleMessages, setVisibleMessages] = useState<Message[]>([]);
-  const [showTyping, setShowTyping] = useState(false);
-
-  useEffect(() => {
-    allMessages.forEach((msg) => {
-      // Show typing indicator 1s before each bot message
-      if (msg.sender === 'bot') {
-        const delayMs = (msg as any).id === 1 ? 500 : (msg as any).id === 3 ? 3200 : 6800;
-        setTimeout(() => setShowTyping(true), Math.max(0, delayMs - 1000));
-      }
-      
-      const revealDelay = (msg as any).id === 1 ? 500 
-        : (msg as any).id === 2 ? 1500 
-        : (msg as any).id === 3 ? 3200 
-        : (msg as any).id === 4 ? 5000 
-        : 6800;
-
-      setTimeout(() => {
-        setShowTyping(false);
-        setVisibleMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
-      }, revealDelay);
-    });
-  }, []);
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [language, setLanguage] = useState<'en' | 'hi'>('hi');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -95,38 +74,88 @@ const Voice = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [visibleMessages, showTyping]);
+  }, [messages]);
 
-  const getAIResponse = (text: string): { text: string; actionCard?: Message['actionCard'] } => {
+  const aiResponses: Record<string, { content: string; actionCard?: Message['actionCard'] }> = {
+    'hai': {
+      content: 'Namaste! Main RegulaAI Assistant hoon. Aap mujhse GST, EPF, ya kisi bhi compliance savaal pooch sakte ho. Aapki kitni filings pending hain?',
+      actionCard: { title: 'View All Pending', link: '/app/obligations' },
+    },
+    'hello': {
+      content: 'Hello! I\'m your RegulaAI Assistant. You can ask me about GST, EPF, or any compliance questions. You have 3 filings due this week.',
+      actionCard: { title: 'View All Pending', link: '/app/obligations' },
+    },
+    'gstr': {
+      content: 'GSTR-3B kaafi important hai. Agar aap miss karte ho, toh ₹50/day late fee lagta hai. Main check kar raha hoon... aapka GSTR-3B July 20 tak file karna hai.',
+      actionCard: { title: 'File GSTR-3B Now', due: 'July 20', amount: '₹8,300', link: '/app/filing' },
+    },
+    'epf': {
+      content: 'EPF June ka contribution July 15 tak file karna hai. Agar delay hoti hai, toh 1% interest per month lagta hai. Shall I prepare the challan?',
+      actionCard: { title: 'Generate EPF Challan', due: 'July 15' },
+    },
+    'penalty': {
+      content: 'Currently aap pe ek overdue filing hai: GSTR-3B June 2025. Ispe ₹600 late fee already accumulate ho chuka hai. Har din ₹50 badhta hai.',
+      actionCard: { title: 'Pay Penalty & File', amount: '₹600+', link: '/app/filing' },
+    },
+    'deadline': {
+      content: 'Aapki upcoming deadlines:\n• GSTR-1: July 11 (2 days)\n• GSTR-3B: July 20\n• EPF: July 15',
+      actionCard: { title: 'View Calendar', link: '/app/obligations' },
+    },
+    'help': {
+      content: 'Main aapko ye karne mein madad kar sakta hoon:\n• GST filing status check\n• Deadline reminders\n• Penalty calculation\n• Filing agent open karna\n• Circular analysis\n\nKya help chahiye?',
+    },
+    'filing': {
+      content: 'Filing Agent mein jaata hoon. Wahan se aap apni returns pre-filled karwa sakte ho aur ek click mein submit kar sakte ho.',
+      actionCard: { title: 'Open Filing Agent', link: '/app/filing' },
+    },
+    'analysis': {
+      content: 'Circular Analyzer mein aap kisi bhi government circular ka URL ya text paste kar sakte ho. Hamare AI agents extract karnege ki aap kya karna hai.',
+      actionCard: { title: 'Open Circular Analyzer', link: '/app/analyzer' },
+    },
+    'radar': {
+      content: 'Compliance Radar se aap future regulatory changes predict kar sakte ho. Is month 2 big changes expected hain textile sector mein.',
+      actionCard: { title: 'Open Compliance Radar', link: '/app/radar' },
+    },
+  };
+
+  const getAIResponse = (text: string): { content: string; actionCard?: Message['actionCard'] } => {
     const lowerText = text.toLowerCase();
 
+    // Check for keywords
     if (lowerText.includes('gstr') || lowerText.includes('gst')) {
-      return {
-        text: 'GSTR-3B kaafi important hai. Agar aap miss karte ho, toh ₹50/day late fee lagta hai. Main check kar raha hoon... aapka GSTR-3B July 20 tak file karna hai.',
-        actionCard: { title: 'File GSTR-3B Now', due: 'July 20', amount: '₹8,300', link: '/app/filing' }
-      };
+      return aiResponses['gstr'];
     }
     if (lowerText.includes('epf') || lowerText.includes('pf') || lowerText.includes('epfo')) {
-      return {
-        text: 'EPF June ka contribution July 15 tak file karna hai. Agar delay hoti hai, toh 1% interest per month lagta hai. Shall I prepare the challan?',
-        actionCard: { title: 'Generate EPF Challan', due: 'July 15' }
-      };
+      return aiResponses['epf'];
     }
     if (lowerText.includes('penalty') || lowerText.includes('fine') || lowerText.includes('late fee')) {
-      return {
-        text: 'Currently aap pe ek overdue filing hai: GSTR-3B June 2025. Ispe ₹600 late fee already accumulate ho chuka hai. Har din ₹50 badhta hai.',
-        actionCard: { title: 'Pay Penalty & File', amount: '₹600+', link: '/app/filing' }
-      };
+      return aiResponses['penalty'];
     }
     if (lowerText.includes('deadline') || lowerText.includes('due') || lowerText.includes('date')) {
-      return {
-        text: 'Aapki upcoming deadlines:\n• GSTR-1: July 11 (2 days)\n• GSTR-3B: July 20\n• EPF: July 15',
-        actionCard: { title: 'View Calendar', link: '/app/obligations' }
-      };
+      return aiResponses['deadline'];
+    }
+    if (lowerText.includes('help') || lowerText.includes('madad')) {
+      return aiResponses['help'];
+    }
+    if (lowerText.includes('file') || lowerText.includes('submit')) {
+      return aiResponses['filing'];
+    }
+    if (lowerText.includes('circular') || lowerText.includes('analysis')) {
+      return aiResponses['analysis'];
+    }
+    if (lowerText.includes('radar') || lowerText.includes('predict')) {
+      return aiResponses['radar'];
+    }
+    if (lowerText.includes('hai') || lowerText.includes('hindi')) {
+      return aiResponses['hai'];
+    }
+    if (lowerText.includes('hello') || lowerText.includes('hi ')) {
+      return aiResponses['hello'];
     }
 
+    // Default response
     return {
-      text: language === 'hi'
+      content: language === 'hi'
         ? 'Main samajh gaya. Aap kya karna chahte ho? Main aapki compliance savaalon ka jawab de sakta hoon aur filing mein madad kar sakta hoon.'
         : 'I understand. What would you like to do? I can help with compliance questions and filing.',
     };
@@ -137,29 +166,31 @@ const Voice = () => {
 
     const userMessage: Message = {
       id: Date.now(),
-      sender: 'user',
-      text: inputText,
+      type: 'user',
+      content: inputText,
+      isVoice: false,
       timestamp: new Date(),
     };
 
-    setVisibleMessages(prev => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputText('');
-    setShowTyping(true);
+    setIsTyping(true);
 
     // Simulate AI thinking
     setTimeout(() => {
       const response = getAIResponse(inputText);
-      const botMessage: Message = {
+      const aiMessage: Message = {
         id: Date.now() + 1,
-        sender: 'bot',
-        text: response.text,
-        hasCard: !!response.actionCard,
+        type: 'assistant',
+        content: response.content,
+        isVoice: false,
+        hasActionCard: !!response.actionCard,
         actionCard: response.actionCard,
         timestamp: new Date(),
       };
-      setVisibleMessages(prev => [...prev, botMessage]);
-      setShowTyping(false);
-    }, 1200);
+      setMessages(prev => [...prev, aiMessage]);
+      setIsTyping(false);
+    }, 1000 + Math.random() * 500);
   };
 
   const handleVoiceRecord = () => {
@@ -172,28 +203,29 @@ const Voice = () => {
 
         const voiceMessage: Message = {
           id: Date.now(),
-          sender: 'user',
-          text: '🎙️ Voice Note ▶ 0:03',
+          type: 'user',
+          content: 'Voice Note [0:03]',
           isVoice: true,
           voiceDuration: '0:03',
           timestamp: new Date(),
         };
-        setVisibleMessages(prev => [...prev, voiceMessage]);
-        setShowTyping(true);
+        setMessages(prev => [...prev, voiceMessage]);
+        setIsTyping(true);
 
         setTimeout(() => {
-          setVisibleMessages(prev => [
-            ...prev,
-            {
-              id: Date.now() + 1,
-              sender: 'bot',
-              text: 'Aapki GST filing status check kar raha hoon... Sab normal hai. GSTR-3B draft file ready hai.',
-              hasCard: true,
-              actionCard: { title: 'Open Filing Agent', link: '/app/filing' },
-              timestamp: new Date(),
-            },
-          ]);
-          setShowTyping(false);
+          const response = aiResponses['gstr'];
+          const aiMessage: Message = {
+            id: Date.now() + 1,
+            type: 'assistant',
+            content: response.content,
+            isVoice: true,
+            voiceDuration: '0:15',
+            hasActionCard: true,
+            actionCard: response.actionCard,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, aiMessage]);
+          setIsTyping(false);
         }, 1500);
       }, 3000);
     }
@@ -250,15 +282,15 @@ const Voice = () => {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {visibleMessages.map(message => (
+          {messages.map(message => (
             <div
               key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-[75%] ${message.sender === 'user' ? 'order-2' : 'order-1'}`}>
+              <div className={`max-w-[75%] ${message.type === 'user' ? 'order-2' : 'order-1'}`}>
                 <div
                   className={`rounded-2xl px-4 py-3 ${
-                    message.sender === 'user'
+                    message.type === 'user'
                       ? 'bg-primary text-white rounded-br-sm'
                       : 'bg-surface text-text-primary rounded-bl-sm border border-border'
                   }`}
@@ -274,17 +306,22 @@ const Voice = () => {
                           <div className="w-1 h-4 bg-current rounded-full" />
                           <div className="w-1 h-3 bg-current rounded-full" />
                         </div>
-                        <span className="text-sm opacity-90">{message.voiceDuration || '0:04'}</span>
+                        <span className="text-sm opacity-90">{message.voiceDuration}</span>
                       </div>
+                      <button className="ml-2 opacity-70 hover:opacity-100">
+                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                          <div className="w-0 h-0 border-t-4 border-t-transparent border-l-4 border-l-current border-b-4 border-b-transparent ml-0.5" />
+                        </div>
+                      </button>
                     </div>
                   ) : (
-                    <p className="text-sm whitespace-pre-line">{message.text}</p>
+                    <p className="text-sm whitespace-pre-line">{message.content}</p>
                   )}
                 </div>
 
-                {message.hasCard && message.actionCard && (
+                {message.hasActionCard && message.actionCard && (
                   <div className={`mt-2 bg-white border border-border rounded-lg p-3 shadow-sm ${
-                    message.sender === 'user' ? 'bg-primary/5 border-primary/20' : ''
+                    message.type === 'user' ? 'bg-primary/5 border-primary/20' : ''
                   }`}>
                     <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
                       <FileText className="w-4 h-4 text-primary" />
@@ -306,23 +343,22 @@ const Voice = () => {
                   </div>
                 )}
 
-                <div className={`text-xs text-text-tertiary mt-1 ${message.sender === 'user' ? 'text-right' : ''}`}>
+                <div className={`text-xs text-text-tertiary mt-1 ${message.type === 'user' ? 'text-right' : ''}`}>
                   {message.timestamp.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             </div>
           ))}
 
-          {/* Typing indicator bubble */}
-          {showTyping && (
+          {isTyping && (
             <div className="flex justify-start">
-              <div className="bg-surface border border-border rounded-2xl px-4 py-3 rounded-bl-sm flex items-center gap-2">
+              <div className="bg-surface border border-border rounded-2xl px-4 py-3 rounded-bl-sm">
                 <div className="flex gap-1 items-center">
-                  <div className="dot" />
-                  <div className="dot" />
-                  <div className="dot" />
+                  <div className="w-2 h-2 bg-text-tertiary rounded-full typing-dot" />
+                  <div className="w-2 h-2 bg-text-tertiary rounded-full typing-dot" />
+                  <div className="w-2 h-2 bg-text-tertiary rounded-full typing-dot" />
+                  <span className="text-xs text-text-tertiary ml-2">RegulaAI is typing...</span>
                 </div>
-                <span className="text-xs text-text-tertiary ml-2">RegulaAI is typing...</span>
               </div>
             </div>
           )}
@@ -366,6 +402,25 @@ const Voice = () => {
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes typing {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+        .typing-dot {
+          animation: typing 1.4s ease-in-out infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+      `}</style>
     </div>
   );
 };

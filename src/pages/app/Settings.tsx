@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { User, Bell, FileText, Users, CreditCard, Save, Check, Plus, Trash2 } from 'lucide-react';
+import { User, Bell, FileText, Users, CreditCard, Save, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useToast } from '../../contexts/ToastContext';
 
 const tabs = [
   { id: 'profile', label: 'Business Profile', icon: User },
@@ -41,7 +40,6 @@ interface TeamMember {
 }
 
 const Settings = () => {
-  const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const { user, updateUser } = useAuth();
   const [saved, setSaved] = useState(false);
@@ -122,22 +120,16 @@ const Settings = () => {
         { name: 'Professional Tax', active: user.hasProfTax || false, id: '' },
         { name: 'FSSAI', active: user.hasFSSAI || false, id: '' },
       ]);
-      setHasChanges(false);
     }
   }, [user]);
 
-  // Track changes (only when state changes after initial load)
-  const handleProfileChange = (key: string, val: string) => {
-    setProfile(prev => ({ ...prev, [key]: val }));
+  // Track changes
+  useEffect(() => {
     setHasChanges(true);
-  };
-
-  const handleNotificationChange = (key: string, val: any) => {
-    setNotifications(prev => ({ ...prev, [key]: val }));
-    setHasChanges(true);
-  };
+  }, [profile, notifications, registrations]);
 
   const handleSave = () => {
+    // Update user context + localStorage
     updateUser({
       fullName: profile.fullName,
       email: profile.email,
@@ -166,18 +158,15 @@ const Settings = () => {
 
     setSaved(true);
     setHasChanges(false);
-    addToast('Settings saved', 'success');
     setTimeout(() => setSaved(false), 3000);
   };
 
   const toggleRegistration = (name: string) => {
     setRegistrations(prev => prev.map(r => r.name === name ? { ...r, active: !r.active } : r));
-    setHasChanges(true);
   };
 
   const updateRegistrationId = (name: string, id: string) => {
     setRegistrations(prev => prev.map(r => r.name === name ? { ...r, id } : r));
-    setHasChanges(true);
   };
 
   const addTeamMember = () => {
@@ -192,12 +181,10 @@ const Settings = () => {
     setTeamMembers(prev => [...prev, member]);
     setNewTeamEmail('');
     setNewTeamRole('Viewer');
-    addToast('Team member invited', 'success');
   };
 
   const removeTeamMember = (id: string) => {
     setTeamMembers(prev => prev.filter(m => m.id !== id));
-    addToast('Team member removed', 'success');
   };
 
   return (
@@ -216,6 +203,14 @@ const Settings = () => {
           </button>
         )}
       </div>
+
+      {/* Saved toast */}
+      {saved && (
+        <div className="bg-accent-green/10 border border-accent-green text-accent-green rounded-lg px-4 py-3 flex items-center gap-2">
+          <Check className="w-5 h-5" />
+          Settings saved successfully!
+        </div>
+      )}
 
       <div className="bg-white rounded-card shadow-card overflow-hidden">
         {/* Tabs */}
@@ -250,7 +245,7 @@ const Settings = () => {
                   <input
                     type="text"
                     value={profile.fullName}
-                    onChange={e => handleProfileChange('fullName', e.target.value)}
+                    onChange={e => setProfile({ ...profile, fullName: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                   />
                 </div>
@@ -259,7 +254,7 @@ const Settings = () => {
                   <input
                     type="email"
                     value={profile.email}
-                    onChange={e => handleProfileChange('email', e.target.value)}
+                    onChange={e => setProfile({ ...profile, email: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                   />
                 </div>
@@ -270,7 +265,7 @@ const Settings = () => {
                 <input
                   type="text"
                   value={profile.businessName}
-                  onChange={e => handleProfileChange('businessName', e.target.value)}
+                  onChange={e => setProfile({ ...profile, businessName: e.target.value })}
                   className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                 />
               </div>
@@ -279,7 +274,7 @@ const Settings = () => {
                 <label className="block text-sm font-medium text-text-primary mb-1">Industry/Sector</label>
                 <select
                   value={profile.industry}
-                  onChange={e => handleProfileChange('industry', e.target.value)}
+                  onChange={e => setProfile({ ...profile, industry: e.target.value })}
                   className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition bg-white"
                 >
                   <option value="">Select Industry</option>
@@ -294,7 +289,7 @@ const Settings = () => {
                   <label className="block text-sm font-medium text-text-primary mb-1">State</label>
                   <select
                     value={profile.state}
-                    onChange={e => handleProfileChange('state', e.target.value)}
+                    onChange={e => setProfile({ ...profile, state: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition bg-white"
                   >
                     <option value="">Select State</option>
@@ -308,7 +303,7 @@ const Settings = () => {
                   <input
                     type="text"
                     value={profile.city}
-                    onChange={e => handleProfileChange('city', e.target.value)}
+                    onChange={e => setProfile({ ...profile, city: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                   />
                 </div>
@@ -319,7 +314,7 @@ const Settings = () => {
                   <label className="block text-sm font-medium text-text-primary mb-1">Number of Employees</label>
                   <select
                     value={profile.employees}
-                    onChange={e => handleProfileChange('employees', e.target.value)}
+                    onChange={e => setProfile({ ...profile, employees: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition bg-white"
                   >
                     <option value="">Select</option>
@@ -333,7 +328,7 @@ const Settings = () => {
                   <label className="block text-sm font-medium text-text-primary mb-1">Annual Turnover</label>
                   <select
                     value={profile.turnover}
-                    onChange={e => handleProfileChange('turnover', e.target.value)}
+                    onChange={e => setProfile({ ...profile, turnover: e.target.value })}
                     className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition bg-white"
                   >
                     <option value="">Select</option>
@@ -358,7 +353,7 @@ const Settings = () => {
                   <input
                     type="tel"
                     value={notifications.whatsapp}
-                    onChange={e => handleNotificationChange('whatsapp', e.target.value)}
+                    onChange={e => setNotifications({ ...notifications, whatsapp: e.target.value })}
                     placeholder="9876543210"
                     className="flex-1 px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                   />
@@ -370,7 +365,7 @@ const Settings = () => {
                 <input
                   type="email"
                   value={notifications.email}
-                  onChange={e => handleNotificationChange('email', e.target.value)}
+                  onChange={e => setNotifications({ ...notifications, email: e.target.value })}
                   className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                 />
               </div>
@@ -384,9 +379,7 @@ const Settings = () => {
                     { key: 'alert1day', label: '1 day before deadline' },
                   ].map(option => (
                     <label key={option.key} className="flex items-center gap-3 cursor-pointer">
-                      <button
-                        type="button"
-                        onClick={() => handleNotificationChange(option.key, !(notifications[option.key as keyof typeof notifications]))}
+                      <div
                         className={`w-5 h-5 rounded border-2 transition flex items-center justify-center ${
                           notifications[option.key as keyof typeof notifications]
                             ? 'bg-primary border-primary'
@@ -396,7 +389,7 @@ const Settings = () => {
                         {notifications[option.key as keyof typeof notifications] && (
                           <Check className="w-3 h-3 text-white" />
                         )}
-                      </button>
+                      </div>
                       <span className="text-text-primary">{option.label}</span>
                     </label>
                   ))}
@@ -407,7 +400,7 @@ const Settings = () => {
                 <label className="block text-sm font-medium text-text-primary mb-3">Language Preference</label>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => handleNotificationChange('language', 'en')}
+                    onClick={() => setNotifications({ ...notifications, language: 'en' })}
                     className={`flex-1 py-3 rounded-lg font-medium transition ${
                       notifications.language === 'en'
                         ? 'bg-primary text-white'
@@ -417,7 +410,7 @@ const Settings = () => {
                     English
                   </button>
                   <button
-                    onClick={() => handleNotificationChange('language', 'hi')}
+                    onClick={() => setNotifications({ ...notifications, language: 'hi' })}
                     className={`flex-1 py-3 rounded-lg font-medium transition ${
                       notifications.language === 'hi'
                         ? 'bg-primary text-white'
@@ -596,7 +589,7 @@ const Settings = () => {
 
       {/* Save button fixed at bottom on mobile */}
       {hasChanges && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border z-50 shadow-md">
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border">
           <button
             onClick={handleSave}
             className="w-full px-4 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition flex items-center justify-center gap-2"

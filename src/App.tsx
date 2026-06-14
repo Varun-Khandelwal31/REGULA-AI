@@ -13,7 +13,6 @@ import Voice from './pages/app/Voice';
 import Radar from './pages/app/Radar';
 import Vault from './pages/app/Vault';
 import Settings from './pages/app/Settings';
-import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   const { isAuthenticated, onboardingComplete } = useAuth();
@@ -43,14 +42,14 @@ function App() {
           element={<AppLayout />}
         >
           <Route index element={<Navigate to="/app/dashboard" replace />} />
-          <Route path="dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="obligations" element={<ProtectedRoute><Obligations /></ProtectedRoute>} />
-          <Route path="analyzer" element={<ProtectedRoute><Analyzer /></ProtectedRoute>} />
-          <Route path="filing" element={<ProtectedRoute><Filing /></ProtectedRoute>} />
-          <Route path="voice" element={<ProtectedRoute><Voice /></ProtectedRoute>} />
-          <Route path="radar" element={<ProtectedRoute><Radar /></ProtectedRoute>} />
-          <Route path="vault" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
-          <Route path="settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="obligations" element={<Obligations />} />
+          <Route path="analyzer" element={<Analyzer />} />
+          <Route path="filing" element={<Filing />} />
+          <Route path="voice" element={<Voice />} />
+          <Route path="radar" element={<Radar />} />
+          <Route path="vault" element={<Vault />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

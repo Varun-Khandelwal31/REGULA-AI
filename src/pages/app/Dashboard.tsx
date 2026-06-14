@@ -10,88 +10,26 @@ import {
   TrendingUp,
   Zap,
   Calendar,
-  X,
+  Loader2,
 } from 'lucide-react';
 import { PieChart, Pie, ResponsiveContainer, Cell } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
-import { useToast } from '../../contexts/ToastContext';
-import { mockObligations } from '../../data/mockData';
+import { mockObligations, mockActivities } from '../../data/mockData';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { addToast } = useToast();
   const navigate = useNavigate();
-  const [penalty, setPenalty] = useState(600);
+  const [currentPenalty, setCurrentPenalty] = useState(600);
   const [healthScore, setHealthScore] = useState(78);
   const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
+  const [activities, setActivities] = useState(mockActivities);
 
-  // Read onboarding user data
-  const userData = JSON.parse(localStorage.getItem('regulaai_user') || '{}');
-  const name = userData.fullName || userData.name || 'User';
-  const businessName = userData.businessName || 'Demo Business';
-  const sector = userData.industry || userData.sector || 'default';
-  const state = userData.state || 'All India';
-
-  const [showWelcome, setShowWelcome] = useState(
-    localStorage.getItem('regulaai_onboarding_complete') === 'true' &&
-    !localStorage.getItem('regulaai_welcome_dismissed')
-  );
-
-  const handleDismissWelcome = () => {
-    localStorage.setItem('regulaai_welcome_dismissed', 'true');
-    setShowWelcome(false);
-  };
-
-  // Sector based obligations filter
-  const sectorObligations = {
-    'Textile': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'HSN Report', 'GSTR-9'],
-    'Food & Beverage': ['GSTR-1', 'GSTR-3B', 'FSSAI Renewal', 'EPF Challan', 'ESI', 'Shop License Renewal'],
-    'IT Services': ['GSTR-1', 'GSTR-3B', 'TDS Return', 'Advance Tax', 'Professional Tax', 'MCA Annual Return'],
-    'default': ['GSTR-1', 'GSTR-3B', 'EPF Challan', 'ESI Contribution', 'Professional Tax', 'MCA Annual Return']
-  };
-
-  const sectorList = sectorObligations[sector as keyof typeof sectorObligations] || sectorObligations['default'];
-
-  const matchObligation = (obName: string, obType: string) => {
-    const nameLower = obName.toLowerCase();
-    const typeLower = obType.toLowerCase();
-    return sectorList.some(term => {
-      const termLower = term.toLowerCase();
-      if (termLower === 'gstr-1') return nameLower.includes('gstr-1');
-      if (termLower === 'gstr-3b') return nameLower.includes('gstr-3b');
-      if (termLower === 'gstr-9') return nameLower.includes('gstr-9');
-      if (termLower === 'epf challan') return nameLower.includes('epf') || typeLower.includes('epfo');
-      if (termLower === 'esi contribution' || termLower === 'esi') return nameLower.includes('esi') || typeLower.includes('esi');
-      if (termLower === 'fssai renewal') return nameLower.includes('fssai') || typeLower.includes('fssai');
-      if (termLower === 'shop license renewal') return nameLower.includes('shop') || nameLower.includes('license');
-      if (termLower === 'tds return') return nameLower.includes('tds') || typeLower.includes('income tax');
-      if (termLower === 'advance tax') return nameLower.includes('advance') || typeLower.includes('income tax');
-      if (termLower === 'professional tax') return nameLower.includes('professional') || typeLower.includes('professional');
-      if (termLower === 'mca annual return') return nameLower.includes('mca') || typeLower.includes('mca');
-      if (termLower === 'hsn report') return nameLower.includes('hsn') || nameLower.includes('gstr-1');
-      return nameLower.includes(termLower) || typeLower.includes(termLower);
-    });
-  };
-
-  const displayObligations = mockObligations.filter(o => matchObligation(o.name, o.type));
-
-  const pending = displayObligations.filter(o => o.status === 'pending' || o.status === 'due_soon');
-  const dueSoon = displayObligations.filter(o => o.status === 'due_soon');
-  const overdue = displayObligations.filter(o => o.status === 'overdue');
-  const completed = displayObligations.filter(o => o.status === 'completed');
-
-  const complianceData = [
-    { name: 'Compliant', value: completed.length, color: '#16A34A' },
-    { name: 'Pending', value: pending.length, color: '#EF9F27' },
-    { name: 'Overdue', value: overdue.length, color: '#E24B4A' },
-  ];
-
-  // Penalty ticking up by 50 every 3s
   useEffect(() => {
+    // Animate penalty counter
     const interval = setInterval(() => {
-      setPenalty(prev => {
-        const newVal = prev + 50;
-        if (newVal % 200 === 0) {
+      setCurrentPenalty(prev => {
+        const newVal = prev + Math.floor(Math.random() * 20) + 10;
+        if (newVal % 200 < 50) {
           setShowPenaltyWarning(true);
           setTimeout(() => setShowPenaltyWarning(false), 3000);
         }
@@ -102,15 +40,24 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Health score based on display obligations
-    const total = displayObligations.length;
-    if (total === 0) {
-      setHealthScore(100);
-      return;
-    }
-    const score = Math.max(0, Math.min(100, 100 - (overdue.length * 20) - (dueSoon.length * 5)));
+    // Health score based on obligations
+    const overdue = mockObligations.filter(o => o.status === 'overdue').length;
+    const dueSoon = mockObligations.filter(o => o.status === 'due_soon').length;
+    const total = mockObligations.length;
+    const score = Math.max(0, Math.min(100, 100 - (overdue * 20) - (dueSoon * 5)));
     setHealthScore(score);
-  }, [displayObligations, overdue.length, dueSoon.length]);
+  }, []);
+
+  const pending = mockObligations.filter(o => o.status === 'pending' || o.status === 'due_soon');
+  const dueSoon = mockObligations.filter(o => o.status === 'due_soon');
+  const overdue = mockObligations.filter(o => o.status === 'overdue');
+  const completed = mockObligations.filter(o => o.status === 'completed');
+
+  const complianceData = [
+    { name: 'Compliant', value: completed.length, color: '#16A34A' },
+    { name: 'Pending', value: pending.length, color: '#EF9F27' },
+    { name: 'Overdue', value: overdue.length, color: '#E24B4A' },
+  ];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -131,7 +78,7 @@ const Dashboard = () => {
     return 'text-accent-red';
   };
 
-  const handleTakeAction = () => {
+  const handleTakeAction = (obligationId: string) => {
     navigate('/app/filing');
   };
 
@@ -154,19 +101,6 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Welcome Banner */}
-      {showWelcome && (
-        <div className="bg-primary/10 border border-primary/20 rounded-card p-5 flex items-center justify-between animate-fadeIn">
-          <div>
-            <h4 className="font-semibold text-primary">🎉 Welcome to RegulaAI, {businessName}!</h4>
-            <p className="text-sm text-text-secondary mt-1">Your compliance dashboard is ready.</p>
-          </div>
-          <button onClick={handleDismissWelcome} className="text-text-tertiary hover:text-text-primary transition">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
       {/* Penalty Warning Toast */}
       {showPenaltyWarning && (
         <div className="fixed top-20 right-6 z-50 bg-accent-red text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fadeIn">
@@ -178,10 +112,10 @@ const Dashboard = () => {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-text-primary">
-          {getGreeting()}, {name} 👋
+          {getGreeting()}, {user?.fullName?.split(' ')[0] || 'User'}!
         </h1>
         <p className="text-text-secondary mt-1">
-          Here's your compliance status for <strong className="text-text-primary">{businessName}</strong> · <span className="text-xs px-2 py-0.5 bg-surface border rounded text-text-secondary">{sector} · {state}</span>
+          Here's your compliance status for {user?.businessName || 'Demo Business'}
         </p>
       </div>
 
@@ -192,7 +126,7 @@ const Dashboard = () => {
             <ClipboardList className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
             <Link to="/app/obligations" className="text-xs text-primary hover:underline">View all</Link>
           </div>
-          <div className="text-3xl font-bold text-text-primary">{displayObligations.length}</div>
+          <div className="text-3xl font-bold text-text-primary">{mockObligations.length}</div>
           <div className="text-sm text-text-secondary mt-1">Total Obligations</div>
           <div className="text-xs text-text-tertiary mt-1">across all registrations</div>
         </div>
@@ -268,11 +202,11 @@ const Dashboard = () => {
             </Link>
           </div>
           <div className="space-y-3">
-            {displayObligations.slice(0, 6).map(obligation => (
+            {mockObligations.slice(0, 6).map(obligation => (
               <div
                 key={obligation.id}
                 className="flex items-center justify-between p-4 border border-border rounded-lg hover:border-primary/50 hover:shadow-sm transition cursor-pointer"
-                onClick={handleTakeAction}
+                onClick={() => handleTakeAction(obligation.id)}
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -299,7 +233,7 @@ const Dashboard = () => {
                       : `${obligation.daysRemaining}d`}
                   </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleTakeAction(); }}
+                    onClick={(e) => { e.stopPropagation(); handleTakeAction(obligation.id); }}
                     className="px-3 py-1.5 bg-primary/10 text-primary rounded text-sm font-medium hover:bg-primary/20 transition"
                   >
                     Take Action
@@ -307,11 +241,6 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
-            {displayObligations.length === 0 && (
-              <div className="text-center text-text-tertiary py-8">
-                No active obligations found for sector {sector}
-              </div>
-            )}
           </div>
         </div>
 
@@ -328,17 +257,16 @@ const Dashboard = () => {
               <div className="text-xs text-white/50">Overdue by 12 days</div>
             </div>
             <div className="text-center py-4">
-              <div key={penalty} className="text-4xl font-bold text-accent-red animate-flashRed">
-                ₹{penalty.toLocaleString('en-IN')}
+              <div className="text-4xl font-bold text-accent-red">
+                ₹{currentPenalty.toLocaleString()}
               </div>
               <div className="text-xs text-white/60 mt-1">Current Penalty (ticking up)</div>
             </div>
             <div className="text-sm text-center text-white/70 mb-4">
-              Filing NOW saves ₹{(penalty + 1400).toLocaleString('en-IN')} vs waiting 28 more days
+              Filing NOW saves ₹1,400 vs waiting 28 more days
             </div>
             <Link
               to="/app/filing"
-              onClick={() => addToast('Opening Filing Agent...', 'info')}
               className="block w-full py-3 bg-accent-red hover:bg-red-600 text-white font-medium rounded-lg text-center transition"
             >
               File Now
@@ -392,6 +320,40 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Recent Activity */}
+      <div className="bg-white rounded-card shadow-card p-6">
+        <h2 className="font-semibold text-text-primary mb-4">Recent Activity</h2>
+        <div className="relative">
+          <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-border" />
+          <div className="space-y-4">
+            {activities.map(activity => (
+              <div key={activity.id} className="relative flex items-start gap-4 pl-8">
+                <div
+                  className={`absolute left-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                    activity.status === 'success'
+                      ? 'bg-accent-green text-white'
+                      : activity.status === 'warning'
+                      ? 'bg-accent-amber text-navy'
+                      : 'bg-primary text-white'
+                  }`}
+                >
+                  {activity.status === 'success' && <CheckCircle className="w-4 h-4" />}
+                  {activity.status === 'warning' && <Clock className="w-4 h-4" />}
+                  {activity.status === 'info' && <TrendingUp className="w-4 h-4" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-text-primary">{activity.action}</span>
+                    <span className="text-xs text-text-tertiary">{activity.time}</span>
+                  </div>
+                  <div className="text-sm text-text-secondary">{activity.details}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
@@ -406,13 +368,6 @@ const Dashboard = () => {
         }
         .animate-pulse-border {
           animation: pulseBorder 2s ease-in-out infinite;
-        }
-        @keyframes flashRed { 
-          0% { color: #E24B4A; transform: scale(1.05); }
-          100% { color: #E24B4A; transform: scale(1); } 
-        }
-        .animate-flashRed {
-          animation: flashRed 0.5s ease-out;
         }
       `}</style>
     </div>

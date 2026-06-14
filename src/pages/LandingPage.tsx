@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import * as THREE from 'three';
 import {
   Scale,
   Mic,
@@ -19,176 +18,182 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-function useCountUp(target: number, duration = 2000, inView: boolean) {
-  const [count, setCount] = useState(0);
-  
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const step = (timestamp: number) => {
-      if (!start) start = timestamp;
-      const progress = Math.min((timestamp - start) / duration, 1);
-      // ease-out: 1 - (1 - progress)^3
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.floor(eased * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [inView, target, duration]);
-  
-  return count;
-}
-
 const LandingPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [statsVisible, setStatsVisible] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
+  const [counts, setCounts] = useState({ msme: 0, penalties: 0, agents: 0, response: 0 });
+  const [currentPenalty, setCurrentPenalty] = useState(600);
 
-  const countMsme = useCountUp(63, 2000, inView);
-  const countPenalties = useCountUp(2000, 2000, inView);
-  const countAgents = useCountUp(6, 2000, inView);
-  const countResponse = useCountUp(3, 2000, inView);
-
-  // Three.js Background
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
 
-    // Create Scene
-    const scene = new THREE.Scene();
-
-    // Create WebGLRenderer
-    const renderer = new THREE.WebGLRenderer({
-      canvas: canvas,
-      alpha: true,
-      antialias: true,
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-    // Perspective Camera
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
-    camera.position.z = 4;
-
-    // 80 Points (particles) in range -5 to 5
+    // Particles for neural network effect
+    const particles: Array<{
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      size: number;
+    }> = [];
     const particleCount = 80;
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount * 3; i++) {
-      positions[i] = (Math.random() - 0.5) * 10;
-    }
-    const particlesGeometry = new THREE.BufferGeometry();
-    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-    const particlesMaterial = new THREE.PointsMaterial({
-      color: 0x1E5EE5,
-      size: 0.05,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const particlePoints = new THREE.Points(particlesGeometry, particlesMaterial);
-    scene.add(particlePoints);
-
-    // Connect nearby particles when distance < 1.5
-    const lineIndices: number[] = [];
-    const posArr = particlesGeometry.attributes.position.array as Float32Array;
     for (let i = 0; i < particleCount; i++) {
-      const p1 = new THREE.Vector3(posArr[i * 3], posArr[i * 3 + 1], posArr[i * 3 + 2]);
-      for (let j = i + 1; j < particleCount; j++) {
-        const p2 = new THREE.Vector3(posArr[j * 3], posArr[j * 3 + 1], posArr[j * 3 + 2]);
-        if (p1.distanceTo(p2) < 1.5) {
-          lineIndices.push(i, j);
-        }
-      }
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        size: Math.random() * 2 + 1,
+      });
     }
-    const linesGeometry = new THREE.BufferGeometry();
-    linesGeometry.setAttribute('position', particlesGeometry.attributes.position);
-    linesGeometry.setIndex(lineIndices);
 
-    const linesMaterial = new THREE.LineBasicMaterial({
-      color: 0x1E5EE5,
-      transparent: true,
-      opacity: 0.15,
-    });
-    const lines = new THREE.LineSegments(linesGeometry, linesMaterial);
-    scene.add(lines);
+    // 3D Shapes data
+    const shapes = [
+      { type: 'icosahedron', x: 0.2, y: 0.3, size: 80, rotation: 0, speed: 0.002, color: '#1E5EE5' },
+      { type: 'torus', x: 0.8, y: 0.25, size: 60, rotation: 0, speed: 0.003, color: '#7F77DD' },
+      { type: 'octahedron', x: 0.15, y: 0.7, size: 70, rotation: 0, speed: 0.0025, color: '#1E5EE5' },
+      { type: 'icosahedron', x: 0.75, y: 0.65, size: 50, rotation: 0, speed: 0.0015, color: '#7F77DD' },
+      { type: 'torus', x: 0.5, y: 0.8, size: 40, rotation: 0, speed: 0.002, color: '#1E5EE5' },
+    ];
 
-    // 3 wireframe meshes
-    const meshMaterial = new THREE.MeshBasicMaterial({
-      color: 0x1E5EE5,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.25,
-    });
+    let mouseX = 0.5;
+    let mouseY = 0.5;
 
-    const icosahedron = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 1), meshMaterial);
-    icosahedron.position.set(-2, 1, -1);
-    scene.add(icosahedron);
-
-    const torus = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.2, 8, 20), meshMaterial);
-    torus.position.set(2, -1, -2);
-    scene.add(torus);
-
-    const octahedron = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), meshMaterial);
-    octahedron.position.set(0, 2, -3);
-    scene.add(octahedron);
-
-    const meshes = [icosahedron, torus, octahedron];
-
-    // Mouse parallax
-    const target = { x: 0, y: 0 };
     const handleMouseMove = (e: MouseEvent) => {
-      target.x = (e.clientX / window.innerWidth - 0.5) * 0.8;
-      target.y = -(e.clientY / window.innerHeight - 0.5) * 0.8;
+      mouseX = e.clientX / canvas.width;
+      mouseY = e.clientY / canvas.height;
     };
     window.addEventListener('mousemove', handleMouseMove);
 
-    // Resize handler
-    const handleResize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+    const drawShape = (shape: typeof shapes[0]) => {
+      const x = shape.x * canvas.width + (mouseX - 0.5) * 30;
+      const y = shape.y * canvas.height + (mouseY - 0.5) * 30;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(shape.rotation);
+
+      ctx.strokeStyle = shape.color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.2;
+
+      if (shape.type === 'icosahedron') {
+        // Draw icosahedron wireframe
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(0, -shape.size);
+          ctx.lineTo(shape.size * 0.9, shape.size * 0.3);
+          ctx.lineTo(-shape.size * 0.9, shape.size * 0.3);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.rotate(Math.PI * 2 / 3);
+        }
+      } else if (shape.type === 'torus') {
+        // Draw torus wireframe
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, shape.size, shape.size * 0.3, (i * Math.PI) / 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (shape.type === 'octahedron') {
+        // Draw octahedron wireframe
+        ctx.beginPath();
+        ctx.moveTo(0, -shape.size);
+        ctx.lineTo(shape.size * 0.7, 0);
+        ctx.lineTo(0, shape.size);
+        ctx.lineTo(-shape.size * 0.7, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, -shape.size);
+        ctx.lineTo(0, shape.size);
+        ctx.moveTo(shape.size * 0.7, 0);
+        ctx.lineTo(-shape.size * 0.7, 0);
+        ctx.stroke();
+      }
+
+      ctx.restore();
     };
-    window.addEventListener('resize', handleResize);
 
-    // Animation loop
-    let animationFrameId: number;
+    let animationFrame: number;
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Slow rotation
-      meshes.forEach(mesh => {
-        mesh.rotation.x += 0.003;
-        mesh.rotation.y += 0.005;
+      // Draw gradient background
+      const gradient = ctx.createRadialGradient(
+        canvas.width * 0.5,
+        canvas.height * 0.4,
+        0,
+        canvas.width * 0.5,
+        canvas.height * 0.4,
+        canvas.width * 0.7
+      );
+      gradient.addColorStop(0, 'rgba(30, 94, 229, 0.15)');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw and update particles
+      particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(30, 94, 229, ${0.3 + p.size * 0.1})`;
+        ctx.fill();
+
+        // Connect particles
+        particles.forEach((p2, j) => {
+          if (i >= j) return;
+          const dx = p.x - p2.x;
+          const dy = p.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 150) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = `rgba(30, 94, 229, ${0.1 * (1 - dist / 150)})`;
+            ctx.stroke();
+          }
+        });
       });
 
-      // Mouse Lerp
-      camera.position.x += (target.x - camera.position.x) * 0.05;
-      camera.position.y += (target.y - camera.position.y) * 0.05;
-      camera.lookAt(0, 0, -2);
+      // Draw shapes
+      shapes.forEach(shape => {
+        shape.rotation += shape.speed;
+        drawShape(shape);
+      });
 
-      renderer.render(scene, camera);
+      animationFrame = requestAnimationFrame(animate);
     };
     animate();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('resize', handleResize);
-      renderer.dispose();
     };
   }, []);
 
   // Intersection observer for stats
   useEffect(() => {
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true);
+      entries => {
+        if (entries[0].isIntersecting) {
+          setStatsVisible(true);
         }
       },
       { threshold: 0.3 }
@@ -196,6 +201,30 @@ const LandingPage = () => {
     if (statsRef.current) observer.observe(statsRef.current);
     return () => observer.disconnect();
   }, []);
+
+  // Animate stats
+  useEffect(() => {
+    if (!statsVisible) return;
+    const targets = { msme: 63, penalties: 2000, agents: 6, response: 3 };
+    const duration = 2000;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+
+      setCounts({
+        msme: Math.round(targets.msme * easeOut),
+        penalties: Math.round(targets.penalties * easeOut),
+        agents: Math.round(targets.agents * easeOut),
+        response: Math.round(targets.response * easeOut),
+      });
+
+      if (progress < 1) requestAnimationFrame(animate);
+    };
+    animate();
+  }, [statsVisible]);
 
   const features = [
     { icon: Mic, title: 'Hindi Voice WhatsApp', desc: 'Ask in Hindi, get instant replies with action cards' },
@@ -219,18 +248,7 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-navy-darker text-white overflow-x-hidden">
       {/* 3D Canvas Background */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          zIndex: 0,
-          pointerEvents: 'none',
-        }}
-      />
+      <canvas ref={canvasRef} className="fixed inset-0 z-0" />
 
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass-dark">
@@ -258,7 +276,7 @@ const LandingPage = () => {
 
       {/* Hero Section */}
       <section className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 pt-16">
-        <div className="text-center max-w-4xl mx-auto" style={{ position: 'relative', zIndex: 10 }}>
+        <div className="text-center max-w-4xl mx-auto">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span className="text-sm text-white/90">Powered by Agentic AI — India's First Compliance Autopilot</span>
@@ -324,19 +342,19 @@ const LandingPage = () => {
       <section ref={statsRef} className="relative z-10 bg-navy-darker py-16 border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="text-center">
-            <div className="text-4xl md:text-5xl font-bold mb-2">{countMsme}M+</div>
+            <div className="text-4xl md:text-5xl font-bold mb-2">{counts.msme}M+</div>
             <div className="text-text-tertiary text-sm">MSMEs</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl md:text-5xl font-bold mb-2">₹{countPenalties.toLocaleString()}Cr+</div>
+            <div className="text-4xl md:text-5xl font-bold mb-2">₹{counts.penalties.toLocaleString()} Cr+</div>
             <div className="text-text-tertiary text-sm">Penalties Avoided</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl md:text-5xl font-bold mb-2">{countAgents}</div>
+            <div className="text-4xl md:text-5xl font-bold mb-2">{counts.agents}</div>
             <div className="text-text-tertiary text-sm">AI Agents</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl md:text-5xl font-bold mb-2">&lt;{countResponse} sec</div>
+            <div className="text-4xl md:text-5xl font-bold mb-2">&lt;{counts.response}s</div>
             <div className="text-text-tertiary text-sm">Response Time</div>
           </div>
         </div>
